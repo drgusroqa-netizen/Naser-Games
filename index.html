@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naser Games | متجر الألعاب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700;900&display=swap');
+
+        :root {
+            --primary: #000000;
+            --secondary: #ffffff;
+            --accent: #333333;
+        }
+
+        body {
+            background-color: var(--secondary);
+            color: var(--primary);
+            font-family: 'Tajawal', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        .glass-header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .profile-btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .profile-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .game-card {
+            background: #fff;
+            border: 1px solid #eee;
+            transition: all 0.4s ease;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .game-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-color: #000;
+        }
+
+        .game-card img {
+            transition: transform 0.5s ease;
+        }
+
+        .game-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .input-style {
+            border: 1px solid #ddd;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-style:focus {
+            border-color: #000;
+            outline: none;
+        }
+
+        .btn-primary {
+            background: #000;
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: #333;
+            transform: translateY(-2px);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #000;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Navbar -->
+    <nav class="glass-header fixed top-0 w-full z-40 px-6 py-4 flex justify-between items-center">
+        <h1 class="text-3xl font-black tracking-tighter uppercase italic">Naser Games</h1>
+        
+        <div class="flex items-center gap-4">
+            <!-- Info Button -->
+            <button onclick="showAbout()" class="profile-btn w-10 h-10 rounded-full border border-black flex items-center justify-center font-bold hover:bg-black hover:text-white" title="عن المصمم">
+                ؟
+            </button>
+            
+            <!-- Login/Profile Button -->
+            <div onclick="openLogin()" class="profile-btn cursor-pointer" title="لوحة التحكم">
+                <svg class="w-10 h-10 bg-black text-white p-2 rounded-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Admin Floating Button -->
+    <button id="adminAddBtn" onclick="openAddGame()" class="hidden fixed bottom-10 right-10 w-16 h-16 rounded-full bg-black text-white text-3xl font-bold shadow-2xl z-50 hover:scale-110 active:scale-95 transition-all flex items-center justify-center">
+        +
+    </button>
+
+    <!-- Hero Section -->
+    <header class="pt-32 pb-16 px-6 text-center">
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-6xl font-black mb-4">اكتشف عالم المتعة</h2>
+            <p class="text-gray-500 text-xl font-light">مكتبة الألعاب المختارة بعناية من قبل ناصر</p>
+            <div class="h-1 w-20 bg-black mx-auto mt-6"></div>
+        </div>
+    </header>
+
+    <!-- Games Grid -->
+    <main class="max-w-7xl mx-auto px-6 pb-24">
+        <div id="gamesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <!-- Game items will appear here -->
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-black text-white py-12 px-6 text-center">
+        <p class="text-sm opacity-50">© 2024 Naser Games. جميع الحقوق محفوظة.</p>
+    </footer>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="bg-white p-10 rounded-2xl w-full max-w-md shadow-2xl transform transition-all">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold">تسجيل دخول المدير</h2>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="email" placeholder="البريد الإلكتروني" class="input-style w-full p-4 rounded-xl">
+                <input type="password" id="password" placeholder="كلمة السر" class="input-style w-full p-4 rounded-xl">
+                <button onclick="handleLogin()" class="btn-primary w-full py-4 rounded-xl font-bold text-lg">دخول</button>
+            </div>
+            <button onclick="closeModals()" class="w-full mt-6 text-gray-400 hover:text-black transition">إلغاء وإغلاق</button>
+        </div>
+    </div>
+
+    <!-- Add Game Modal -->
+    <div id="addGameModal" class="modal">
+        <div class="bg-white p-10 rounded-2xl w-full max-w-lg shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6 text-center">إضافة لعبة جديدة للمكتبة</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1">اسم اللعبة</label>
+                    <input type="text" id="gameName" placeholder="مثال: Minecraft" class="input-style w-full p-3 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">رابط اللعبة</label>
+                    <input type="text" id="gameUrl" placeholder="https://..." class="input-style w-full p-3 rounded-lg text-left" dir="ltr">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1">صورة الغلاف</label>
+                    <div class="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-black transition cursor-pointer relative">
+                        <input type="file" id="gameImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div id="uploadLabel">
+                            <svg class="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"></path></svg>
+                            <span class="text-gray-400">اختر صورة من جهازك</span>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="saveGame()" class="btn-primary w-full py-4 rounded-xl font-bold mt-4">نشر اللعبة الآن</button>
+                <button onclick="closeModals()" class="w-full mt-2 text-gray-400 underline">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal">
+        <div class="bg-white p-12 rounded-3xl w-full max-w-xl shadow-2xl text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-2 bg-black"></div>
+            <h2 class="text-4xl font-black mb-6 italic">NASER GAMES</h2>
+            <div class="space-y-4 text-xl">
+                <div class="bg-gray-50 p-4 rounded-2xl">
+                    <p class="text-gray-400 text-sm uppercase mb-1">المصمم</p>
+                    <p class="font-bold">عبد الناصر محمد معتصم الشمير</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-2xl">
+                    <p class="text-gray-400 text-sm uppercase mb-1">الجنسية</p>
+                    <p class="font-bold">سوري الجنسية</p>
+                </div>
+            </div>
+            <button onclick="closeModals()" class="mt-10 btn-primary px-12 py-3 rounded-full">إغلاق</button>
+        </div>
+    </div>
+
+    <script>
+        let isAdmin = false;
+        let games = [];
+
+        window.onload = () => {
+            const savedGames = localStorage.getItem('naser_games_pro');
+            if (savedGames) {
+                games = JSON.parse(savedGames);
+                renderGames();
+            }
+        };
+
+        function openLogin() {
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+
+        function showAbout() {
+            document.getElementById('aboutModal').style.display = 'flex';
+        }
+
+        function openAddGame() {
+            document.getElementById('addGameModal').style.display = 'flex';
+        }
+
+        function closeModals() {
+            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        }
+
+        function handleLogin() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+
+            if (email === 'abdulnaser2507@icloud.com' && pass === 'Naser2507@') {
+                isAdmin = true;
+                document.getElementById('adminAddBtn').classList.remove('hidden');
+                closeModals();
+                alert('مرحباً بك يا سيد عبد الناصر. تم تفعيل صلاحيات المدير.');
+            } else {
+                alert('عذراً، البيانات غير صحيحة.');
+            }
+        }
+
+        function saveGame() {
+            const name = document.getElementById('gameName').value;
+            const url = document.getElementById('gameUrl').value;
+            const imgInput = document.getElementById('gameImage');
+
+            if (!name || !url || !imgInput.files[0]) {
+                alert('جميع الحقول مطلوبة، يرجى التحقق.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const newGame = {
+                    id: Date.now(),
+                    name: name,
+                    url: url,
+                    image: e.target.result
+                };
+                games.push(newGame);
+                localStorage.setItem('naser_games_pro', JSON.stringify(games));
+                renderGames();
+                closeModals();
+                // Reset
+                document.getElementById('gameName').value = '';
+                document.getElementById('gameUrl').value = '';
+            };
+            reader.readAsDataURL(imgInput.files[0]);
+        }
+
+        function renderGames() {
+            const grid = document.getElementById('gamesGrid');
+            grid.innerHTML = '';
+
+            if (games.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-20 text-center opacity-30">لا توجد ألعاب مضافة حالياً</div>`;
+                return;
+            }
+
+            games.forEach(game => {
+                const card = document.createElement('div');
+                card.className = 'game-card rounded-2xl flex flex-col group';
+                card.innerHTML = `
+                    <div class="relative overflow-hidden h-64 bg-gray-100">
+                        <img src="${game.image}" class="w-full h-full object-cover" alt="${game.name}">
+                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300"></div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold mb-4 line-clamp-1">${game.name}</h3>
+                        <a href="${game.url}" target="_blank" class="inline-block w-full text-center py-3 bg-black text-white rounded-xl font-bold transform transition active:scale-95">تشغيل اللعبة</a>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                closeModals();
+            }
+        }
+
+        // Preview image name on selection
+        document.getElementById('gameImage').addEventListener('change', function(e) {
+            if(this.files[0]) {
+                document.getElementById('uploadLabel').innerHTML = `<span class="text-black font-bold">${this.files[0].name}</span>`;
+            }
+        });
+    </script>
+</body>
+</html>

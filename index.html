@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naser Games - إدارة الألعاب</title>
+    <title>Naser Games - مزامنة مباشرة</title>
     <style>
         * {
             margin: 0;
@@ -18,6 +18,29 @@
             color: #333;
         }
 
+        /* شريط التزامن */
+        .sync-bar {
+            background: #ffd700;
+            color: #333;
+            text-align: center;
+            padding: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 1001;
+            animation: slideDown 0.5s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
         /* الهيدر */
         .header {
             background: linear-gradient(145deg, #1a1a1a 0%, #2d2d2d 100%);
@@ -28,7 +51,7 @@
             align-items: center;
             justify-content: space-between;
             position: sticky;
-            top: 0;
+            top: 36px;
             z-index: 100;
         }
 
@@ -67,6 +90,23 @@
             transform: scale(1.1) rotate(5deg);
             border-color: #ffd700;
             box-shadow: 0 0 30px rgba(255,215,0,0.5);
+        }
+
+        .admin-badge {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            background: #ffd700;
+            color: #333;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            border: 2px solid white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
 
         .question-mark {
@@ -459,29 +499,6 @@
             box-shadow: 0 5px 15px rgba(255,68,68,0.4);
         }
 
-        .edit-btn {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.3s ease;
-            flex: 1;
-            justify-content: center;
-        }
-
-        .edit-btn:hover {
-            background: linear-gradient(45deg, #45a049, #388e3c);
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(76,175,80,0.4);
-        }
-
         /* نافذة تأكيد الحذف */
         .confirm-modal {
             display: none;
@@ -694,8 +711,10 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            animation: slideDown 0.5s ease, fadeOut 0.5s ease 2.5s forwards;
+            animation: slideDown 0.5s ease;
             font-weight: bold;
+            min-width: 300px;
+            justify-content: center;
         }
 
         .notification.error {
@@ -708,27 +727,28 @@
             color: white;
         }
 
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -100%);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, 0);
-            }
-        }
-
-        @keyframes fadeOut {
-            to {
-                opacity: 0;
-                transform: translate(-50%, -20px);
-                visibility: hidden;
-            }
+        .notification.info {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            color: white;
         }
 
         .notification-icon {
             font-size: 24px;
+        }
+
+        /* مؤشر التحميل */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* تذييل الصفحة */
@@ -775,10 +795,20 @@
                 opacity: 1;
                 transform: translateY(0);
             }
+
+            .notification {
+                min-width: 90%;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- شريط المزامنة -->
+    <div class="sync-bar" id="syncBar">
+        <span id="syncMessage">🔄 النظام متصل وجاهز للمزامنة</span>
+    </div>
+
     <header class="header">
         <div class="logo">🎮 Naser Games</div>
         <div class="profile-section">
@@ -786,6 +816,7 @@
                  alt="Profile" 
                  class="profile-image" 
                  id="profileImage">
+            <div class="admin-badge" id="adminBadge" style="display: none;">👑</div>
             <div class="question-mark" id="questionMark">?</div>
         </div>
     </header>
@@ -856,27 +887,141 @@
         // متغيرات الحالة
         let isAdmin = false;
         let games = [];
-        let lastGameCount = 0;
+        let lastUpdateTime = Date.now();
         let gameToDeleteIndex = null;
+        let syncInterval = null;
+        let isSyncing = false;
 
-        // تحميل الألعاب المحفوظة
+        // مفتاح التخزين الموحد
+        const STORAGE_KEY = 'naser_games_database';
+        const SYNC_KEY = 'naser_games_sync';
+        const ADMIN_KEY = 'naser_games_admin';
+
+        // تحميل الألعاب من التخزين المحلي
         function loadGames() {
-            const savedGames = localStorage.getItem('games');
-            if (savedGames) {
-                games = JSON.parse(savedGames);
+            try {
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    const parsedData = JSON.parse(savedData);
+                    if (Array.isArray(parsedData.games)) {
+                        games = parsedData.games;
+                        lastUpdateTime = parsedData.lastUpdate || Date.now();
+                    } else {
+                        games = [];
+                    }
+                } else {
+                    // إذا لم يكن هناك بيانات، نضيف الألعاب الافتراضية
+                    addDefaultGames();
+                }
+            } catch (e) {
+                console.error('خطأ في تحميل البيانات:', e);
+                games = [];
             }
             
-            // التحقق من وجود ألعاب جديدة
-            if (games.length > lastGameCount) {
-                showNotification(`تم إضافة ${games.length - lastGameCount} لعبة جديدة!`, 'success');
-            } else if (games.length < lastGameCount) {
-                showNotification(`تم حذف ${lastGameCount - games.length} لعبة`, 'error');
-            }
-            
-            lastGameCount = games.length;
             updateGamesCount();
             displayGames();
+            updateSyncStatus('متصل');
         }
+
+        // حفظ الألعاب مع وقت التحديث
+        function saveGames() {
+            try {
+                const dataToSave = {
+                    games: games,
+                    lastUpdate: Date.now(),
+                    version: '1.0'
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+                
+                // إرسال إشارة للتحديث
+                localStorage.setItem(SYNC_KEY, Date.now().toString());
+                
+                // تحديث وقت آخر مزامنة
+                lastUpdateTime = dataToSave.lastUpdate;
+                
+                return true;
+            } catch (e) {
+                console.error('خطأ في حفظ البيانات:', e);
+                showNotification('فشل في حفظ البيانات', 'error');
+                return false;
+            }
+        }
+
+        // مزامنة البيانات مع الأجهزة الأخرى
+        function syncWithOtherDevices() {
+            if (isSyncing) return;
+            
+            isSyncing = true;
+            try {
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    const parsedData = JSON.parse(savedData);
+                    
+                    // التحقق من وجود تحديثات
+                    if (parsedData.lastUpdate > lastUpdateTime) {
+                        const oldGames = games.length;
+                        games = parsedData.games;
+                        lastUpdateTime = parsedData.lastUpdate;
+                        
+                        updateGamesCount();
+                        displayGames();
+                        
+                        // إظهار إشعار بالتحديث
+                        if (games.length > oldGames) {
+                            showNotification(`تم تحديث المكتبة: +${games.length - oldGames} لعبة جديدة`, 'success');
+                        } else if (games.length < oldGames) {
+                            showNotification(`تم تحديث المكتبة: -${oldGames - games.length} لعبة`, 'info');
+                        } else {
+                            showNotification('تم تحديث البيانات', 'info');
+                        }
+                        
+                        updateSyncStatus('تمت المزامنة');
+                    }
+                }
+            } catch (e) {
+                console.error('خطأ في المزامنة:', e);
+                updateSyncStatus('خطأ في المزامنة');
+            } finally {
+                isSyncing = false;
+            }
+        }
+
+        // تحديث حالة المزامنة في الشريط
+        function updateSyncStatus(status) {
+            const syncBar = document.getElementById('syncMessage');
+            const icons = {
+                'متصل': '🟢',
+                'جاري المزامنة': '🔄',
+                'تمت المزامنة': '✅',
+                'خطأ في المزامنة': '🔴'
+            };
+            syncBar.innerHTML = `${icons[status] || '🔄'} ${status}`;
+        }
+
+        // بدء المزامنة الدورية
+        function startSync() {
+            // مزامنة فورية
+            syncWithOtherDevices();
+            
+            // مزامنة كل 3 ثواني
+            if (syncInterval) {
+                clearInterval(syncInterval);
+            }
+            syncInterval = setInterval(() => {
+                updateSyncStatus('جاري المزامنة');
+                syncWithOtherDevices();
+            }, 3000);
+        }
+
+        // الاستماع للتغييرات من الأجهزة الأخرى
+        window.addEventListener('storage', function(e) {
+            if (e.key === SYNC_KEY || e.key === STORAGE_KEY) {
+                // تأخير بسيط للتأكد من اكتمال الحفظ
+                setTimeout(() => {
+                    syncWithOtherDevices();
+                }, 100);
+            }
+        });
 
         // تحديث عدد الألعاب
         function updateGamesCount() {
@@ -891,7 +1036,8 @@
             
             let icon = '🎮';
             if (type === 'success') icon = '✅';
-            else if (type === 'error') icon = '🗑️';
+            else if (type === 'error') icon = '❌';
+            else if (type === 'info') icon = 'ℹ️';
             
             notification.innerHTML = `
                 <span class="notification-icon">${icon}</span>
@@ -899,8 +1045,12 @@
             `;
             notificationArea.appendChild(notification);
             
+            // إزالة الإشعار بعد 3 ثواني
             setTimeout(() => {
-                notification.remove();
+                notification.style.animation = 'fadeOut 0.5s ease forwards';
+                setTimeout(() => {
+                    notification.remove();
+                }, 500);
             }, 3000);
         }
 
@@ -909,14 +1059,19 @@
             const grid = document.getElementById('gamesGrid');
             grid.innerHTML = '';
             
+            if (games.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 50px;">
+                        <p style="font-size: 24px; color: #999;">🎮 لا توجد ألعاب حالياً</p>
+                        ${isAdmin ? '<p style="color: #ffd700;">اضغط على زر + لإضافة أول لعبة</p>' : ''}
+                    </div>
+                `;
+                return;
+            }
+            
             games.forEach((game, index) => {
                 const gameCard = document.createElement('div');
                 gameCard.className = 'game-card';
-                
-                // إضافة تأثير للعبة الجديدة
-                if (index >= lastGameCount - 1 && games.length > lastGameCount) {
-                    gameCard.classList.add('new');
-                }
                 
                 const imageUrl = game.image || 'https://via.placeholder.com/300x200/333333/ffffff?text=🎮+Game';
                 
@@ -927,9 +1082,6 @@
                             <button class="delete-btn" onclick="showConfirmModal(${index})">
                                 <span>🗑️</span> حذف
                             </button>
-                            <button class="edit-btn" onclick="editGame(${index})">
-                                <span>✏️</span> تعديل
-                            </button>
                         </div>
                     `;
                 }
@@ -937,13 +1089,12 @@
                 gameCard.innerHTML = `
                     <img src="${imageUrl}" alt="${game.name}" class="game-image" onerror="this.src='https://via.placeholder.com/300x200/333333/ffffff?text=🎮+Error'">
                     <div class="game-info">
-                        <a href="${isAdmin ? 'javascript:void(0)' : game.link}" 
+                        <a href="${game.link}" 
                            class="game-name" 
-                           ${!isAdmin ? `target="_blank"` : ''}
-                           onclick="${!isAdmin ? `window.open('${game.link}', '_blank')` : 'return false'}">
+                           target="_blank"
+                           rel="noopener noreferrer">
                             ${game.name}
                         </a>
-                        ${index >= lastGameCount - 1 && games.length > lastGameCount ? '<span class="game-badge">جديد!</span>' : ''}
                         ${adminControls}
                     </div>
                 `;
@@ -972,30 +1123,21 @@
             if (gameToDeleteIndex !== null) {
                 const deletedGame = games[gameToDeleteIndex];
                 games.splice(gameToDeleteIndex, 1);
-                saveGames();
                 
-                // تحديث العرض
-                lastGameCount = games.length;
-                updateGamesCount();
-                displayGames();
+                if (saveGames()) {
+                    updateGamesCount();
+                    displayGames();
+                    showNotification(`تم حذف اللعبة "${deletedGame.name}" بنجاح`, 'error');
+                }
                 
-                // إرسال حدث التحديث لجميع المستخدمين
-                localStorage.setItem('lastUpdate', Date.now().toString());
-                
-                showNotification(`تم حذف اللعبة "${deletedGame.name}" بنجاح`, 'error');
                 closeConfirmModal();
             }
         }
 
-        // تعديل لعبة (يمكن تطويرها لاحقاً)
-        function editGame(index) {
-            showNotification('خاصية التعديل قيد التطوير قريباً ✨', 'success');
-        }
-
         // إضافة لعبة جديدة
         function addGame() {
-            const name = document.getElementById('gameName').value;
-            const link = document.getElementById('gameLink').value;
+            const name = document.getElementById('gameName').value.trim();
+            const link = document.getElementById('gameLink').value.trim();
             const imageFile = document.getElementById('gameImage').files[0];
 
             if (!name || !link) {
@@ -1007,9 +1149,32 @@
             try {
                 new URL(link);
             } catch {
-                showNotification('الرجاء إدخال رابط صحيح', 'error');
+                showNotification('الرجاء إدخال رابط صحيح (يبدأ بـ http:// أو https://)', 'error');
                 return;
             }
+
+            const processAddGame = (imageData = null) => {
+                const newGame = {
+                    name: name,
+                    link: link,
+                    image: imageData,
+                    addedAt: Date.now()
+                };
+                
+                games.push(newGame);
+                
+                if (saveGames()) {
+                    updateGamesCount();
+                    displayGames();
+                    showNotification(`تم إضافة اللعبة "${name}" بنجاح`, 'success');
+                    closeAddGameModal();
+                    
+                    // تنظيف الحقول
+                    document.getElementById('gameName').value = '';
+                    document.getElementById('gameLink').value = '';
+                    document.getElementById('gameImage').value = '';
+                }
+            };
 
             if (imageFile) {
                 // التحقق من حجم الصورة (حد أقصى 2 ميجابايت)
@@ -1020,69 +1185,43 @@
                 
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    addGameToList({
-                        name: name,
-                        link: link,
-                        image: e.target.result
-                    });
+                    processAddGame(e.target.result);
+                };
+                reader.onerror = function() {
+                    showNotification('فشل في قراءة الصورة', 'error');
                 };
                 reader.readAsDataURL(imageFile);
             } else {
-                addGameToList({
-                    name: name,
-                    link: link,
-                    image: null
-                });
+                processAddGame();
             }
         }
 
-        // إضافة اللعبة إلى القائمة وتحديث جميع المستخدمين
-        function addGameToList(newGame) {
-            games.push(newGame);
-            saveGames();
-            
-            // تحديث العرض
-            lastGameCount = games.length;
-            updateGamesCount();
-            displayGames();
-            
-            // إرسال حدث التحديث لجميع المستخدمين
-            localStorage.setItem('lastUpdate', Date.now().toString());
-            
-            showNotification(`تم إضافة اللعبة "${newGame.name}" بنجاح`, 'success');
-            closeAddGameModal();
-            
-            // تنظيف الحقول
-            document.getElementById('gameName').value = '';
-            document.getElementById('gameLink').value = '';
-            document.getElementById('gameImage').value = '';
-        }
-
-        // حفظ الألعاب
-        function saveGames() {
-            localStorage.setItem('games', JSON.stringify(games));
-        }
-
-        // الاستماع للتحديثات من المستخدمين الآخرين
-        window.addEventListener('storage', function(e) {
-            if (e.key === 'games') {
-                // تم تحديث الألعاب من نافذة أخرى
-                const oldCount = games.length;
-                games = JSON.parse(e.newValue || '[]');
-                
-                if (games.length > oldCount) {
-                    showNotification(`تم إضافة ${games.length - oldCount} لعبة جديدة!`, 'success');
-                } else if (games.length < oldCount) {
-                    showNotification(`تم حذف ${oldCount - games.length} لعبة`, 'error');
-                }
-                
-                updateGamesCount();
-                displayGames();
-            } else if (e.key === 'lastUpdate') {
-                // تحديث فوري عند إضافة أو حذف لعبة
-                loadGames();
+        // إضافة الألعاب الافتراضية
+        function addDefaultGames() {
+            if (games.length === 0) {
+                games = [
+                    { 
+                        name: '🎮 لعبة الأكشن المثيرة', 
+                        link: 'https://poki.com/', 
+                        image: 'https://via.placeholder.com/300x200/000000/ffd700?text=⚡+Action+Game',
+                        addedAt: Date.now()
+                    },
+                    { 
+                        name: '🏎️ لعبة السباق السريع', 
+                        link: 'https://www.crazygames.com/', 
+                        image: 'https://via.placeholder.com/300x200/333333/ffd700?text=🏁+Racing+Game',
+                        addedAt: Date.now()
+                    },
+                    { 
+                        name: '🧠 لعبة الذكاء والتحدي', 
+                        link: 'https://www.miniclip.com/', 
+                        image: 'https://via.placeholder.com/300x200/666666/ffd700?text=🧩+Brain+Game',
+                        addedAt: Date.now()
+                    }
+                ];
+                saveGames();
             }
-        });
+        }
 
         // تسجيل الدخول
         function login() {
@@ -1092,11 +1231,37 @@
             if (password === 'Naser2507@' && email === 'abdulnaser2507@icloud.com') {
                 isAdmin = true;
                 document.getElementById('adminPlus').classList.add('active');
+                document.getElementById('adminBadge').style.display = 'flex';
                 closeLoginModal();
-                displayGames(); // إعادة عرض الألعاب لتحديث الروابط وإظهار أزرار الحذف
+                displayGames();
+                
+                // حفظ حالة المدير في التخزين المحلي
+                localStorage.setItem(ADMIN_KEY, 'true');
+                
                 showNotification('مرحباً بك مدير النظام', 'success');
             } else {
                 showNotification('كلمة السر أو البريد الإلكتروني غير صحيح', 'error');
+            }
+        }
+
+        // تسجيل الخروج
+        function logout() {
+            isAdmin = false;
+            document.getElementById('adminPlus').classList.remove('active');
+            document.getElementById('adminBadge').style.display = 'none';
+            localStorage.removeItem(ADMIN_KEY);
+            displayGames();
+            showNotification('تم تسجيل الخروج', 'info');
+        }
+
+        // التحقق من حالة المدير عند تحميل الصفحة
+        function checkAdminStatus() {
+            const adminStatus = localStorage.getItem(ADMIN_KEY);
+            if (adminStatus === 'true') {
+                isAdmin = true;
+                document.getElementById('adminPlus').classList.add('active');
+                document.getElementById('adminBadge').style.display = 'flex';
+                displayGames();
             }
         }
 
@@ -1140,11 +1305,17 @@
 
         // أحداث النقر
         document.getElementById('profileImage').addEventListener('click', function() {
-            const password = prompt('🔑 الرجاء إدخال كلمة السر:');
-            if (password === 'Naser2507@') {
-                showLoginModal();
-            } else if (password !== null) {
-                showNotification('كلمة السر غير صحيحة', 'error');
+            if (isAdmin) {
+                if (confirm('هل تريد تسجيل الخروج؟')) {
+                    logout();
+                }
+            } else {
+                const password = prompt('🔑 الرجاء إدخال كلمة السر:');
+                if (password === 'Naser2507@') {
+                    showLoginModal();
+                } else if (password !== null) {
+                    showNotification('كلمة السر غير صحيحة', 'error');
+                }
             }
         });
 
@@ -1157,37 +1328,26 @@
             closeConfirmModal();
         });
 
-        // إضافة بعض الألعاب الافتراضية
-        function addDefaultGames() {
-            if (games.length === 0) {
-                games = [
-                    { 
-                        name: '🎮 لعبة الأكشن المثيرة', 
-                        link: 'https://poki.com/', 
-                        image: 'https://via.placeholder.com/300x200/000000/ffd700?text=⚡+Action+Game' 
-                    },
-                    { 
-                        name: '🏎️ لعبة السباق السريع', 
-                        link: 'https://www.crazygames.com/', 
-                        image: 'https://via.placeholder.com/300x200/333333/ffd700?text=🏁+Racing+Game' 
-                    },
-                    { 
-                        name: '🧠 لعبة الذكاء والتحدي', 
-                        link: 'https://www.miniclip.com/', 
-                        image: 'https://via.placeholder.com/300x200/666666/ffd700?text=🧩+Brain+Game' 
-                    }
-                ];
-                saveGames();
-                lastGameCount = games.length;
+        // منع إغلاق النوافذ عند النقر داخلها
+        document.querySelectorAll('.login-modal, .designer-info, .add-game-modal, .confirm-modal').forEach(modal => {
+            modal.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        });
+
+        // تحميل البيانات وبدء المزامنة عند تحميل الصفحة
+        window.addEventListener('load', function() {
+            loadGames();
+            checkAdminStatus();
+            startSync();
+        });
+
+        // تنظيف عند إغلاق الصفحة
+        window.addEventListener('beforeunload', function() {
+            if (syncInterval) {
+                clearInterval(syncInterval);
             }
-        }
-
-        // تحديث دوري كل 5 ثواني للتحقق من الألعاب الجديدة
-        setInterval(loadGames, 5000);
-
-        // التهيئة
-        addDefaultGames();
-        loadGames();
+        });
     </script>
 </body>
 </html>
